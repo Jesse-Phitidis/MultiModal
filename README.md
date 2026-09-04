@@ -27,5 +27,5 @@ The code for the MMAR is in [`src/multimodal/models/transformer_feature_router_u
 
 To perform a pytorch lightning training run create a config and run: 
 ```bash
-script/main.py fit --config path_to_config.yaml
+scripts/main.py fit --config path_to_config.yaml
 ```
