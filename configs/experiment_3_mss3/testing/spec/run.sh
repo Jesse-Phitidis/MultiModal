@@ -1,0 +1,7 @@
+python scripts/main.py test --config configs/experiment_3_mss3/testing/spec/DWI.yaml --trainer.devices [1]
+python scripts/main.py test --config configs/experiment_3_mss3/testing/spec/FLAIR.yaml --trainer.devices [1]
+python scripts/main.py test --config configs/experiment_3_mss3/testing/spec/T1w_DWI.yaml --trainer.devices [1]
+python scripts/main.py test --config configs/experiment_3_mss3/testing/spec/T1w_FLAIR.yaml --trainer.devices [1]
+python scripts/main.py test --config configs/experiment_3_mss3/testing/spec/T1w_T2w.yaml --trainer.devices [1]
+python scripts/main.py test --config configs/experiment_3_mss3/testing/spec/T1w.yaml --trainer.devices [1]
+python scripts/main.py test --config configs/experiment_3_mss3/testing/spec/T2w.yaml --trainer.devices [1]

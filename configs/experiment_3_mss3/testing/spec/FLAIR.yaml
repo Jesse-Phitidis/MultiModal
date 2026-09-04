@@ -1,0 +1,179 @@
+model:
+  class_path: multimodal.lightning_modules.LightningModule 
+  init_args:
+    network:
+      class_path: multimodal.models.unet.UNet
+      init_args:
+          spatial_dims: 3
+          in_channels: ${length:${data.init_args.modalities}}
+          out_channels: ${eval:${length:${data.init_args.labels}}+1}
+          filters: [16,32,64,128,256,320]
+          num_output_heads: 4
+          upsample_outputs: true
+    loss_fn:
+      class_path: multimodal.losses.MyDeepSupervisionLoss
+      init_args:
+        loss: 
+          class_path: multimodal.losses.MyDiceCELoss
+          init_args:
+            include_background: false
+            softmax: true
+            reduction: mean_per_batch
+        weight_mode: exp
+        norm: true 
+        max_pool: false
+    patch_size: [160,160,160]
+    modality_augmentation_fn:
+      class_path: multimodal.dropout.RandomUniformMultiDropCorrupt
+      init_args:
+        num_modalities: 4
+        num_skip_epochs_dropout: 10000
+        num_skip_epochs_corruption: 10000
+        corruption_prob: 0.5
+    inference_corruption_fn:
+      class_path: multimodal.corruption.TestTimeCorruption
+      init_args:
+        transform:
+          class_path: monai.transforms.RandGaussianNoise
+          init_args:
+            prob: 1.0
+            mean: 0.0
+            std: 5.0
+    modality_loss_weight: [0.25,0.25,0.25,0.25]
+    num_epochs_skip_weight: 10000
+    num_epochs_all_modalities: 10000
+    inference_modalities:
+      - ["FLAIR"]
+    inference_corruption:
+      - []
+    pred_dir: null
+    metric_dir: results/experiment_3_mss3/metrics/spec
+data:
+  class_path: multimodal.data_modules.DataModule 
+  init_args:
+    data_dir: data
+    train_csv: data/splits_experiment_3/train_T1w_FLAIR.csv
+    val_csv: data/splits_experiment_3/val.csv
+    test_csv: data/splits_experiment_3/test.csv
+    predict_csv: data/splits_experiment_3/test.csv
+    modalities: ["FLAIR"]
+    labels: ["WMH", "ISLtotal"]
+    train_transforms:
+      class_path: torchio.transforms.Compose
+      init_args:
+        transforms:
+          - class_path: multimodal.transforms.CopyAnyAffine
+          - class_path: torchio.transforms.RescaleIntensity
+          - class_path: torchio.transforms.RandomAffine
+            init_args:
+              p: 0.2
+              scales: [0.7, 1.4]
+              degrees: 90
+              isotropic: true
+          - class_path: torchio.transforms.RandomNoise
+            init_args:
+              p: 0.15
+              mean: 0
+              std: [0, 0.316]
+          - class_path: torchio.transforms.RandomBlur
+            init_args:
+              p: 0.1
+              std: [0.5, 1.5]
+          - class_path: multimodal.transforms.Contrast
+            init_args:
+              p: 0.15
+              rng: [0.65, 1.5]
+          - class_path: multimodal.transforms.SimulateLowResolution
+            init_args:
+              p: 0.25
+              factor: [1, 2]
+          - class_path: multimodal.transforms.Gamma
+            init_args:
+              p: 0.15
+              rng: [0.7, 1.5]
+          - class_path: torchio.transforms.RandomFlip
+            init_args:
+              p: 0.5
+              axes: [0, 1, 2]
+          - class_path: torchio.transforms.RandomMotion
+            init_args:
+              p: 0.05
+          - class_path: torchio.transforms.RandomGhosting 
+            init_args:
+              p: 0.05
+          - class_path: torchio.transforms.RandomSpike 
+            init_args:
+              p: 0.05
+          - class_path: torchio.transforms.RandomBiasField 
+            init_args:
+              p: 0.05
+          - class_path: torchio.transforms.RescaleIntensity
+            init_args:
+              percentiles: [0.5, 99.5]
+          - class_path: multimodal.transforms.AddMissingModalities
+            init_args:
+              all_modalities: ["FLAIR"]
+    val_transforms:
+      class_path: torchio.transforms.Compose
+      init_args:
+        transforms:
+          - class_path: multimodal.transforms.CopyAnyAffine
+          - class_path: torchio.transforms.RescaleIntensity
+            init_args:
+              percentiles: [0.5, 99.5]
+          - class_path: torchio.transforms.CropOrPad
+            init_args:
+              target_shape: ${model.init_args.patch_size}
+          - class_path: multimodal.transforms.AddMissingModalities
+            init_args:
+              all_modalities: ["FLAIR"]
+    inference_transforms:
+      class_path: torchio.transforms.Compose
+      init_args:
+        transforms:
+          - class_path: multimodal.transforms.CopyAnyAffine
+          - class_path: multimodal.transforms.ResampleWithinRange
+            init_args:
+              target: [0.95, 1.05, 0.95, 1.05, 0.95, 1.05]
+              to_midpoint: true
+              resample_kwargs:
+                scalars_only: true
+          - class_path: torchio.transforms.RescaleIntensity
+            init_args:
+              percentiles: [0.5, 99.5]
+          - class_path: multimodal.transforms.AddMissingModalities
+            init_args:
+              all_modalities: ["FLAIR"]
+    sampler:
+      class_path: torchio.data.UniformSampler
+      init_args:
+        patch_size: ${model.init_args.patch_size}
+    queue_max_length: 150
+    samples_per_volume: 2
+    num_workers: 8
+    batch_size: 1
+    load_in_memory: true
+optimizer:
+  class_path: torch.optim.AdamW
+  init_args:
+    lr: 0.0003
+    weight_decay: 0.01
+lr_scheduler:
+  class_path: multimodal.schedulers.WarmupCosineLR
+  init_args:
+    warmup_epochs: 30
+    max_epochs: ${trainer.max_epochs}
+    start_factor: 0.1
+    eta_min: 0.0
+trainer:
+  accumulate_grad_batches: 2
+  logger: false
+  accelerator: gpu
+  precision: bf16-mixed
+  max_epochs: 3000
+  check_val_every_n_epoch: 75
+  log_every_n_steps: 1 # not used since we log per epoch anyway
+  callbacks: null
+  enable_checkpointing: false
+seed_everything: 0
+ckpt_path: logs/experiment_3_mss3/FLAIR/MultiModal_e3_mss3/diuv3zeq/checkpoints/epoch=299-dice-FLAIR=0.517-str.ckpt

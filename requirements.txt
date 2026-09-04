@@ -1,0 +1,10 @@
+numpy
+pandas
+scikit-learn
+torchio
+nibabel 
+monai
+tqdm
+wandb
+omegaconf
+jsonargparse[signatures]>=4.27.7
